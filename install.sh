@@ -1,22 +1,38 @@
 #!/usr/bin/env bash
 # =======================================================
-# 🧱 域名封锁管理系统 v4（DNSmasq 劫持版）
+# 🧱 域名封锁管理系统 v5（DNSmasq 一键封锁版）
 # =======================================================
 
 BLOCK_FILE="/etc/domain_block.list"
 DNSMASQ_BLOCK="/etc/dnsmasq.d/blocklist.conf"
 
-# 默认封锁域名
-DEFAULT_DOMAINS=(fast.com speedtest.net www.speedtest.net librespeed.org)
+# 🌐 默认封锁域名列表（测速、新闻、代理类）
+DEFAULT_DOMAINS=(
+falundafa.org minghui.org epochtimes.com ntdtv.com voachinese.com appledaily.com nextdigital.com dalailama.com
+nytimes.com bloomberg.com independent.co.uk freetibet.org citizenpowerforchina.org rfa.org bbc.com theinitium.com
+tibet.net jw.org bannedbook.org dw.com storm.mg yam.com chinadigitaltimes.net ltn.com.tw mpweekly.com cup.com.hk
+thenewslens.com inside.com.tw everylittled.com cool3c.com taketla.zaiko.io news.agentm.tw sportsv.net research.tnlmedia.com
+ad2iction.com viad.com.tw tnlmedia.com becomingaces.com pincong.rocks flipboard.com soundofhope.org wenxuecity.com
+aboluowang.com 2047.name shu.best shenyunperformingarts.org bbc.co.uk cirosantilli.com wsj.com rfi.fr chinapress.com.my
+hancel.org miraheze.org zhuichaguoji.org fawanghuihui.org hopto.org amnesty.org hrw.org irmct.org zhengjian.org
+wujieliulan.com dongtaiwang.com ultrasurf.us yibaochina.com roc-taiwan.org creaders.net upmedia.mg ydn.com.tw
+udn.com theaustralian.com.au voacantonese.com voanews.com bitterwinter.org christianstudy.com learnfalungong.com
+usembassy-china.org.cn master-li.qi-gong.me zhengwunet.org modernchinastudies.org ninecommentaries.com dafahao.com
+shenyuncreations.com tgcchinese.org botanwang.com falungong.org freedomhouse.org abc.net.au
+tracker.openbittorrent.com tracker.opentrackr.org tracker.torrent.eu.org tracker.publicbt.com tracker.coppersurfer.tk
+speedtest.net www.speedtest.net fast.com speed.cloudflare.com fiber.google.com speedof.me speedsmart.net
+testmy.net speedcheck.org internethealthtest.org openspeedtest.com bandwidthplace.com librespeed.org
+)
 
-# 确保 root
-[ "$(id -u)" != "0" ] && { echo "❌ 请用 root 运行"; exit 1; }
+# === 函数 ===
+require_root() {
+  [ "$(id -u)" != "0" ] && { echo "❌ 请使用 root 用户运行"; exit 1; }
+}
 
-# 检查并安装依赖
 install_pkg() {
   local pkg=$1
   if ! dpkg -s "$pkg" >/dev/null 2>&1; then
-    echo "📦 正在安装 $pkg ..."
+    echo "📦 未检测到 $pkg，正在安装..."
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -y -qq
     apt-get install -y -qq "$pkg"
@@ -25,18 +41,15 @@ install_pkg() {
     echo "✅ 已检测到 $pkg"
   fi
 }
-install_pkg dnsmasq
-install_pkg iptables
-install_pkg iptables-persistent
 
-# 初始化文件
-[ ! -f "$BLOCK_FILE" ] && touch "$BLOCK_FILE"
-if [ ! -s "$BLOCK_FILE" ]; then
-  printf "%s\n" "${DEFAULT_DOMAINS[@]}" >"$BLOCK_FILE"
-  echo "✅ 已写入默认域名 (${#DEFAULT_DOMAINS[@]} 个)"
-fi
+init_files() {
+  [ ! -f "$BLOCK_FILE" ] && touch "$BLOCK_FILE"
+  if [ ! -s "$BLOCK_FILE" ]; then
+    printf "%s\n" "${DEFAULT_DOMAINS[@]}" >"$BLOCK_FILE"
+    echo "✅ 已加载默认域名 ${#DEFAULT_DOMAINS[@]} 个"
+  fi
+}
 
-# === 核心函数 ===
 update_dnsmasq() {
   echo "💾 正在更新 dnsmasq 黑名单..."
   echo "# 自动生成：封锁域名列表" >"$DNSMASQ_BLOCK"
@@ -44,7 +57,7 @@ update_dnsmasq() {
     [ -n "$domain" ] && echo "address=/$domain/0.0.0.0" >>"$DNSMASQ_BLOCK"
   done <"$BLOCK_FILE"
 
-  # 让系统 DNS 指向本地 dnsmasq
+  # 确保系统 DNS 使用本地 dnsmasq
   echo "nameserver 127.0.0.1" >/etc/resolv.conf
 
   systemctl restart dnsmasq 2>/dev/null || service dnsmasq restart
@@ -86,7 +99,14 @@ apply_all() {
   update_dnsmasq
 }
 
-# === 主菜单 ===
+# === 主程序 ===
+require_root
+install_pkg dnsmasq
+install_pkg iptables
+install_pkg iptables-persistent
+init_files
+update_dnsmasq
+
 while true; do
   clear
   echo "=============================="
